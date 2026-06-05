@@ -1,8 +1,9 @@
-import json, uuid, os
+import json
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import select
+import uuid, os, io, random
 from app.core.database import get_db
 from app.core.storage import storage
 from app.core.security import get_current_user, require_user, decode_access_token
@@ -85,7 +86,6 @@ async def get_recording(recording_id: str, db: Session = Depends(get_db), user: 
 @router.get("/{recording_id}/audio")
 async def stream_audio(recording_id: str, token: str = None, db: Session = Depends(get_db), user: dict = Depends(get_current_user)):
     """Stream audio -- accepts auth via header or ?token query param (for browser audio elements)"""
-    # Try query-param token fallback
     user_id = user["id"] if user else None
     if not user_id and token:
         payload = decode_access_token(token)
@@ -163,7 +163,7 @@ async def echo_recording(recording_id: str):
 
 @router.get("/{recording_id}/summary")
 async def get_conversation_summary(recording_id: str, db: Session = Depends(get_db), user: dict = Depends(require_user)):
-    """Return pre-generated conversation summary (cached in DB)."""
+    """Return pre-generated conversation summary. Falls back to on-demand generation if cache empty."""
     recording = db.execute(
         select(Recording).where(Recording.id == recording_id, Recording.user_id == user["id"])
     ).scalar_one_or_none()
@@ -171,12 +171,28 @@ async def get_conversation_summary(recording_id: str, db: Session = Depends(get_
         raise HTTPException(404, "录音不存在")
     if recording.summary_json:
         return json.loads(recording.summary_json)
-    return {"summary": "暂无转写内容", "topics": [], "key_points": []}
+
+    # Fallback: generate on demand for recordings that lack cached data
+    tlist = db.execute(
+        select(Transcript).where(Transcript.recording_id == recording_id).order_by(Transcript.start_time)
+    ).scalars().all()
+    if not tlist:
+        return {"summary": "暂无转写内容", "topics": [], "key_points": []}
+
+    from app.services.llm_service import llm_service
+    transcript_data = [{"speaker": t.speaker, "speaker_name": t.speaker_name, "content": t.content} for t in tlist]
+    try:
+        result = await llm_service.summarize_conversation(transcript_data)
+        recording.summary_json = json.dumps(result, ensure_ascii=False)
+        db.commit()
+        return result
+    except Exception:
+        return {"summary": "生成摘要失败，请稍后重试", "topics": [], "key_points": []}
 
 
 @router.get("/{recording_id}/qa")
 async def get_conversation_qa(recording_id: str, db: Session = Depends(get_db), user: dict = Depends(require_user)):
-    """Return pre-generated Q&A pairs (cached in DB)."""
+    """Return pre-generated Q&A pairs. Falls back to on-demand generation if cache empty."""
     recording = db.execute(
         select(Recording).where(Recording.id == recording_id, Recording.user_id == user["id"])
     ).scalar_one_or_none()
@@ -184,4 +200,20 @@ async def get_conversation_qa(recording_id: str, db: Session = Depends(get_db), 
         raise HTTPException(404, "录音不存在")
     if recording.qa_json:
         return json.loads(recording.qa_json)
-    return {"qa_pairs": []}
+
+    # Fallback: generate on demand for recordings that lack cached data
+    tlist = db.execute(
+        select(Transcript).where(Transcript.recording_id == recording_id).order_by(Transcript.start_time)
+    ).scalars().all()
+    if not tlist:
+        return {"qa_pairs": []}
+
+    from app.services.llm_service import llm_service
+    transcript_data = [{"speaker": t.speaker, "speaker_name": t.speaker_name, "content": t.content} for t in tlist]
+    try:
+        result = await llm_service.extract_qa_pairs(transcript_data)
+        recording.qa_json = json.dumps(result, ensure_ascii=False)
+        db.commit()
+        return result
+    except Exception:
+        return {"qa_pairs": []}
