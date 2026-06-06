@@ -1,7 +1,7 @@
 ﻿"""Celery worker entry point
 
 Usage:
-  celery -A celery_worker worker -l info -P solo
+  celery -A celery_worker worker -l info   # -P solo only needed on Windows; Docker uses default prefork
 """
 import os
 import sys

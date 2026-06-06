@@ -355,8 +355,11 @@ class ASREngine:
             logger.info(f"Done: {len(results_list)} segments with speaker labels")
             return results_list
 
-        except ImportError:
-            logger.warning("FunASR not installed, falling back to mock")
+        except ImportError as e:
+            logger.warning(
+                f"FunASR dependency import failed: {type(e).__name__}: {e}, falling back to mock",
+                exc_info=True,
+            )
             return self._transcribe_mock(
                 AudioMeta(path, "wav", 130, 16000, 1, 0),
                 [{"start": 0, "end": 130}],

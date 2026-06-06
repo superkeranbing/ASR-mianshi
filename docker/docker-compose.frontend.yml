@@ -1,0 +1,16 @@
+# Server B: frontend only
+# Deploy: docker compose -f docker-compose.frontend.yml up -d --build
+#
+# Before deploying, replace BACKEND_HOST below with the backend server's IP/domain.
+
+services:
+  frontend:
+    build:
+      context: ../frontend
+      dockerfile: Dockerfile.split
+    container_name: tts-frontend
+    ports:
+      - "80:80"
+    environment:
+      BACKEND_HOST: YOUR_BACKEND_SERVER_IP_OR_DOMAIN
+    restart: unless-stopped
