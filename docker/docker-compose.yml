@@ -1,9 +1,9 @@
 services:
   postgres:
     image: pgvector/pgvector:pg16
-    container_name: tts-postgres
+    container_name: asr-postgres
     environment:
-      POSTGRES_DB: tts_mianshi
+      POSTGRES_DB: asr_mianshi
       POSTGRES_USER: dev
       POSTGRES_PASSWORD: dev123
     ports:
@@ -11,7 +11,7 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U dev -d tts_mianshi"]
+      test: ["CMD-SHELL", "pg_isready -U dev -d asr_mianshi"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -19,7 +19,7 @@ services:
 
   redis:
     image: redis:7-alpine
-    container_name: tts-redis
+    container_name: asr-redis
     ports:
       - "6379:6379"
     healthcheck:
@@ -31,7 +31,7 @@ services:
 
   minio:
     image: minio/minio:latest
-    container_name: tts-minio
+    container_name: asr-minio
     command: server /data --console-address ":9001"
     environment:
       MINIO_ROOT_USER: minioadmin
@@ -51,17 +51,17 @@ services:
 
   backend:
     build: ../backend
-    container_name: tts-backend
+    container_name: asr-backend
     environment:
-      DATABASE_URL: postgresql://dev:dev123@postgres:5432/tts_mianshi
-      SYNC_DATABASE_URL: postgresql://dev:dev123@postgres:5432/tts_mianshi
+      DATABASE_URL: postgresql://dev:dev123@postgres:5432/asr_mianshi
+      SYNC_DATABASE_URL: postgresql://dev:dev123@postgres:5432/asr_mianshi
       REDIS_URL: redis://redis:6379/0
       CELERY_BROKER_URL: redis://redis:6379/0
       CELERY_RESULT_BACKEND: redis://redis:6379/0
       MINIO_ENDPOINT: minio:9000
       MINIO_ACCESS_KEY: minioadmin
       MINIO_SECRET_KEY: minioadmin
-      MINIO_BUCKET: tts-mianshi
+      MINIO_BUCKET: asr-mianshi
       STORAGE_BACKEND: minio
       CORS_ORIGINS: http://localhost
       DEBUG: "false"
@@ -85,19 +85,19 @@ services:
     build:
       context: ../backend
       dockerfile: Dockerfile.gpu     # Dockerfile.gpu for GPU
-    container_name: tts-celery-worker
+    container_name: asr-celery-worker
     command: celery -A celery_worker worker -l info --without-gossip --without-mingle --without-heartbeat
     gpus: all
     environment:
-      DATABASE_URL: postgresql://dev:dev123@postgres:5432/tts_mianshi
-      SYNC_DATABASE_URL: postgresql://dev:dev123@postgres:5432/tts_mianshi
+      DATABASE_URL: postgresql://dev:dev123@postgres:5432/asr_mianshi
+      SYNC_DATABASE_URL: postgresql://dev:dev123@postgres:5432/asr_mianshi
       REDIS_URL: redis://redis:6379/0
       CELERY_BROKER_URL: redis://redis:6379/0
       CELERY_RESULT_BACKEND: redis://redis:6379/0
       MINIO_ENDPOINT: minio:9000
       MINIO_ACCESS_KEY: minioadmin
       MINIO_SECRET_KEY: minioadmin
-      MINIO_BUCKET: tts-mianshi
+      MINIO_BUCKET: asr-mianshi
       STORAGE_BACKEND: minio
       NVIDIA_VISIBLE_DEVICES: all
       NVIDIA_DRIVER_CAPABILITIES: compute,utility
@@ -113,11 +113,11 @@ services:
 
   celery-beat:
     build: ../backend
-    container_name: tts-celery-beat
+    container_name: asr-celery-beat
     command: celery -A celery_worker beat -l info
     environment:
-      DATABASE_URL: postgresql://dev:dev123@postgres:5432/tts_mianshi
-      SYNC_DATABASE_URL: postgresql://dev:dev123@postgres:5432/tts_mianshi
+      DATABASE_URL: postgresql://dev:dev123@postgres:5432/asr_mianshi
+      SYNC_DATABASE_URL: postgresql://dev:dev123@postgres:5432/asr_mianshi
       REDIS_URL: redis://redis:6379/0
       CELERY_BROKER_URL: redis://redis:6379/0
       CELERY_RESULT_BACKEND: redis://redis:6379/0
@@ -132,7 +132,7 @@ services:
     build:
       context: ../frontend
       dockerfile: Dockerfile
-    container_name: tts-frontend
+    container_name: asr-frontend
     ports:
       - "80:80"
     depends_on:

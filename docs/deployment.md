@@ -1,4 +1,4 @@
-# TTS-Mianshi Deployment Guide
+# ASR-Mianshi Deployment Guide
 
 > Last updated: 2026-06-06
 
@@ -36,8 +36,8 @@ frontend/
 
 ```bash
 # 1. Clone and enter project
-git clone <repo-url> tts-mianshi
-cd tts-mianshi
+git clone <repo-url> asr-mianshi
+cd asr-mianshi
 
 # 2. Copy and edit environment
 cp backend/.env.example backend/.env
@@ -52,11 +52,11 @@ curl http://localhost:5173               # Frontend (Vite dev server)
 ```
 
 Dev services start:
-- PostgreSQL `tts-postgres` on `:5432` (user: `dev`, password: `dev123`, db: `tts_mianshi`)
-- Redis `tts-redis` on `:6379`
-- MinIO `tts-minio` on `:9000` (console: `:9001`)
-- Backend `tts-backend` on `:8000` (uvicorn with hot reload)
-- Frontend dev `tts-frontend-dev` on `:5173` (Vite with HMR)
+- PostgreSQL `asr-postgres` on `:5432` (user: `dev`, password: `dev123`, db: `asr_mianshi`)
+- Redis `asr-redis` on `:6379`
+- MinIO `asr-minio` on `:9000` (console: `:9001`)
+- Backend `asr-backend` on `:8000` (uvicorn with hot reload)
+- Frontend dev `asr-frontend-dev` on `:5173` (Vite with HMR)
 
 ### Dev: start Celery worker manually
 
@@ -89,13 +89,13 @@ docker compose -f docker/docker-compose.yml logs -f celery-worker
 
 | Service | Container | Internal Port | Description |
 |---------|-----------|---------------|-------------|
-| postgres | tts-postgres | 5432 | PostgreSQL 16 + pgvector |
-| redis | tts-redis | 6379 | Cache + Celery broker |
-| minio | tts-minio | 9000 | S3-compatible file storage |
-| backend | tts-backend | 8000 | FastAPI application server |
-| celery-worker | tts-celery-worker | ? | Async tasks (ASR + LLM) |
-| celery-beat | tts-celery-beat | ? | Scheduled tasks (cleanup) |
-| frontend | tts-frontend | 80 | Nginx serving built React app |
+| postgres | asr-postgres | 5432 | PostgreSQL 16 + pgvector |
+| redis | asr-redis | 6379 | Cache + Celery broker |
+| minio | asr-minio | 9000 | S3-compatible file storage |
+| backend | asr-backend | 8000 | FastAPI application server |
+| celery-worker | asr-celery-worker | ? | Async tasks (ASR + LLM) |
+| celery-beat | asr-celery-beat | ? | Scheduled tasks (cleanup) |
+| frontend | asr-frontend | 80 | Nginx serving built React app |
 
 The frontend is the only service exposed externally (port 80). All `/api/` and `/ws/` requests are proxied through the frontend's Nginx to the backend.
 
@@ -105,7 +105,7 @@ Set in `docker-compose.yml` under each service:
 
 | Variable | Default | Notes |
 |----------|---------|-------|
-| `DATABASE_URL` | `postgresql://dev:dev123@postgres:5432/tts_mianshi` | Async driver |
+| `DATABASE_URL` | `postgresql://dev:dev123@postgres:5432/asr_mianshi` | Async driver |
 | `SYNC_DATABASE_URL` | same | Sync driver (Celery, Alembic) |
 | `REDIS_URL` | `redis://redis:6379/0` | |
 | `CELERY_BROKER_URL` | `redis://redis:6379/0` | |
@@ -113,7 +113,7 @@ Set in `docker-compose.yml` under each service:
 | `MINIO_ENDPOINT` | `minio:9000` | |
 | `MINIO_ACCESS_KEY` | `minioadmin` | Change in production |
 | `MINIO_SECRET_KEY` | `minioadmin` | Change in production |
-| `MINIO_BUCKET` | `tts-mianshi` | |
+| `MINIO_BUCKET` | `asr-mianshi` | |
 | `JWT_SECRET` | *must override* | Generate with `openssl rand -hex 32` |
 | `LLM_API_KEY` | ? | DeepSeek / Qwen / OpenAI API key |
 | `LLM_BASE_URL` | `https://api.deepseek.com/v1` | |
@@ -144,15 +144,15 @@ Server A (Backend)                         Server B (Frontend)
 
 ```bash
 # Upload code
-scp -r backend/ docker/ user@server-a:/opt/tts-mianshi/
+scp -r backend/ docker/ user@server-a:/opt/asr-mianshi/
 
 # Edit CORS and JWT settings
-vim /opt/tts-mianshi/docker/docker-compose.backend.yml
+vim /opt/asr-mianshi/docker/docker-compose.backend.yml
 # - CORS_ORIGINS: set to http://ServerB_IP,http://your-domain.com
 # - JWT_SECRET: use `openssl rand -hex 32` output
 
 # Start
-cd /opt/tts-mianshi
+cd /opt/asr-mianshi
 docker compose -f docker/docker-compose.backend.yml up -d --build
 
 # Verify
@@ -163,14 +163,14 @@ curl http://localhost:8000/api/health
 
 ```bash
 # Upload code
-scp -r frontend/ docker/docker-compose.frontend.yml user@server-b:/opt/tts-mianshi/
+scp -r frontend/ docker/docker-compose.frontend.yml user@server-b:/opt/asr-mianshi/
 
 # Set backend address
-vim /opt/tts-mianshi/docker/docker-compose.frontend.yml
+vim /opt/asr-mianshi/docker/docker-compose.frontend.yml
 # - BACKEND_HOST: set to ServerA's public IP or domain
 
 # Start
-cd /opt/tts-mianshi
+cd /opt/asr-mianshi
 docker compose -f docker/docker-compose.frontend.yml up -d --build
 
 # Verify
@@ -224,13 +224,13 @@ This means you can change the backend address by restarting the container with a
 
 ```bash
 # Backup PostgreSQL
-docker exec tts-postgres pg_dump -U dev tts_mianshi > backup.sql
+docker exec asr-postgres pg_dump -U dev asr_mianshi > backup.sql
 
 # Restore
-docker exec -i tts-postgres psql -U dev tts_mianshi < backup.sql
+docker exec -i asr-postgres psql -U dev asr_mianshi < backup.sql
 
 # Backup uploads and models
-tar -czf uploads-backup.tar.gz -C /var/lib/docker/volumes tts-mianshi_uploads
+tar -czf uploads-backup.tar.gz -C /var/lib/docker/volumes asr-mianshi_uploads
 ```
 
 ## Troubleshooting
@@ -241,16 +241,16 @@ tar -czf uploads-backup.tar.gz -C /var/lib/docker/volumes tts-mianshi_uploads
 docker compose -f docker/docker-compose.yml logs celery-worker
 
 # Verify Redis connectivity
-docker exec tts-redis redis-cli ping
+docker exec asr-redis redis-cli ping
 
 # Purge stuck tasks
-docker exec tts-redis redis-cli FLUSHALL
+docker exec asr-redis redis-cli FLUSHALL
 ```
 
 ### Database migration
 ```bash
 # Run from backend container
-docker exec tts-backend alembic upgrade head
+docker exec asr-backend alembic upgrade head
 ```
 
 ### Split deploy: frontend can't reach backend
@@ -285,8 +285,8 @@ curl http://localhost:8000/api/health
 curl http://localhost:9000/minio/health/live
 
 # PostgreSQL
-docker exec tts-postgres pg_isready -U dev -d tts_mianshi
+docker exec asr-postgres pg_isready -U dev -d asr_mianshi
 
 # Redis
-docker exec tts-redis redis-cli ping
+docker exec asr-redis redis-cli ping
 ```

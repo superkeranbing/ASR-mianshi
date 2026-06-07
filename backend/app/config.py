@@ -3,16 +3,16 @@ from functools import lru_cache
 import os
 
 class Settings(BaseSettings):
-    APP_NAME: str = "听记面试 TTS-Mianshi"
+    APP_NAME: str = "听记面试 ASR-Mianshi"
     DEBUG: bool = True
     VERSION: str = "1.0.0"
 
     # Database - SQLite for local dev
-    DATABASE_URL: str = "postgresql://dev:dev123@localhost:5432/tts_mianshi"
-    SYNC_DATABASE_URL: str = "postgresql://dev:dev123@localhost:5432/tts_mianshi"
+    DATABASE_URL: str = "postgresql://dev:dev123@localhost:5432/asr_mianshi"
+    SYNC_DATABASE_URL: str = "postgresql://dev:dev123@localhost:5432/asr_mianshi"
 
     # JWT
-    JWT_SECRET: str = "tts-mianshi-dev-secret-key-change-in-production"
+    JWT_SECRET: str = "asr-mianshi-dev-secret-key-change-in-production"
     JWT_ALGORITHM: str = "HS256"
     JWT_EXPIRE_MINUTES: int = 1440
 
@@ -47,7 +47,7 @@ class Settings(BaseSettings):
     MINIO_ENDPOINT: str = "localhost:9000"
     MINIO_ACCESS_KEY: str = "minioadmin"
     MINIO_SECRET_KEY: str = "minioadmin"
-    MINIO_BUCKET: str = "tts-mianshi"
+    MINIO_BUCKET: str = "asr-mianshi"
 
     class Config:
         env_file = ".env"

@@ -1,4 +1,4 @@
-﻿# 听记面试 (TTS-Mianshi) — AI 面试录音转写与分析平台
+﻿# 听记面试 (ASR-Mianshi) — AI 面试录音转写与分析平台
 
 基于 AI 的面试录音转写、分析、提升一体化平台。支持浏览器实时录音、音频文件导入、智能语音转写、说话人分离、AI 面试分析与提升报告生成。
 
@@ -120,7 +120,7 @@ docker compose -f docker/docker-compose.yml up -d --build
 ## 项目结构
 
 ```
-tts-mianshi/
+asr-mianshi/
 ├── frontend/                    # React 19 SPA
 │   ├── src/
 │   │   ├── components/          # 通用 UI 组件（AudioPlayer、Layout 等）

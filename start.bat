@@ -2,7 +2,7 @@
 cd /d "%~dp0"
 
 REM -- Start Docker services if not running
-docker ps | findstr "tts-postgres" >nul 2>&1
+docker ps | findstr "asr-postgres" >nul 2>&1
 if errorlevel 1 (
     echo Starting Docker services...
     docker compose -f docker\docker-compose.dev.yml up -d
@@ -27,7 +27,7 @@ if "%PYTHON_EXE%"=="" (
 )
 
 echo Using Python: %PYTHON_EXE%
-echo Starting TTS-Mianshi on http://localhost:8000
+echo Starting ASR-Mianshi on http://localhost:8000
 echo Frontend: http://localhost:8000
 echo API Docs: http://localhost:8000/api/docs
 echo.

@@ -15,7 +15,7 @@
 - Host `nvidia-smi` succeeds and shows `NVIDIA GeForce RTX 4060 Ti`, so the Windows/NVIDIA driver layer is healthy.
 - `docker info` shows `Runtimes: ... nvidia ...`, so Docker Desktop has NVIDIA runtime support.
 - `docker run --rm --gpus all nvidia/cuda:12.4.0-runtime-ubuntu22.04 nvidia-smi` succeeds, proving Docker-to-GPU passthrough works on this machine.
-- Before worker recreation, the running `tts-celery-worker` had `DeviceRequests = null` and `torch.cuda.is_available() = False`.
+- Before worker recreation, the running `asr-celery-worker` had `DeviceRequests = null` and `torch.cuda.is_available() = False`.
 - After recreating `celery-worker` with the updated compose, `DeviceRequests` becomes `[{"Capabilities":[["gpu"]],...}]` and container-side torch reports `cuda_available=True`, `cuda_device_count=1`, `cuda_name=NVIDIA GeForce RTX 4060 Ti`.
 - The ASR code creates FunASR `AutoModel(...)` instances without any explicit `device`/`cuda` selection.
 

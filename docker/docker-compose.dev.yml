@@ -1,9 +1,9 @@
 services:
   postgres:
     image: docker.m.daocloud.io/pgvector/pgvector:pg16
-    container_name: tts-postgres
+    container_name: asr-postgres
     environment:
-      POSTGRES_DB: tts_mianshi
+      POSTGRES_DB: asr_mianshi
       POSTGRES_USER: dev
       POSTGRES_PASSWORD: dev123
     ports:
@@ -11,14 +11,14 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U dev -d tts_mianshi"]
+      test: ["CMD-SHELL", "pg_isready -U dev -d asr_mianshi"]
       interval: 5s
       timeout: 5s
       retries: 5
 
   redis:
     image: docker.m.daocloud.io/library/redis:7-alpine
-    container_name: tts-redis
+    container_name: asr-redis
     ports:
       - "6379:6379"
     healthcheck:
@@ -29,7 +29,7 @@ services:
 
   minio:
     image: docker.m.daocloud.io/minio/minio:latest
-    container_name: tts-minio
+    container_name: asr-minio
     command: server /data --console-address ":9001"
     environment:
       MINIO_ROOT_USER: minioadmin
@@ -42,20 +42,20 @@ services:
 
   backend:
     build: ../backend
-    container_name: tts-backend
+    container_name: asr-backend
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
     ports:
       - "8000:8000"
     environment:
-      DATABASE_URL: postgresql://dev:dev123@postgres:5432/tts_mianshi
-      SYNC_DATABASE_URL: postgresql://dev:dev123@postgres:5432/tts_mianshi
+      DATABASE_URL: postgresql://dev:dev123@postgres:5432/asr_mianshi
+      SYNC_DATABASE_URL: postgresql://dev:dev123@postgres:5432/asr_mianshi
       REDIS_URL: redis://redis:6379/0
       CELERY_BROKER_URL: redis://redis:6379/0
       CELERY_RESULT_BACKEND: redis://redis:6379/0
       MINIO_ENDPOINT: minio:9000
       MINIO_ACCESS_KEY: minioadmin
       MINIO_SECRET_KEY: minioadmin
-      MINIO_BUCKET: tts-mianshi
+      MINIO_BUCKET: asr-mianshi
       STORAGE_BACKEND: local
       CORS_ORIGINS: http://localhost:5173,http://localhost:8000,http://localhost:80
       DEBUG: "true"
@@ -71,7 +71,7 @@ services:
 
   frontend-dev:
     image: node:22-alpine
-    container_name: tts-frontend-dev
+    container_name: asr-frontend-dev
     working_dir: /app
     ports:
       - "5173:5173"
@@ -86,7 +86,7 @@ services:
 
   frontend:
     build: ../frontend
-    container_name: tts-frontend
+    container_name: asr-frontend
     ports:
       - "80:80"
     depends_on:

@@ -8,7 +8,7 @@ export default function Layout() {
   const setAuth = useAppStore((s) => s.setAuth);
 
   useEffect(() => {
-    const stored = localStorage.getItem("tts-auth");
+    const stored = localStorage.getItem("asr-auth");
     if (stored && !token) {
       try {
         const { user, token: t } = JSON.parse(stored);
