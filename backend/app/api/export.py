@@ -5,9 +5,10 @@ from sqlalchemy.orm import Session
 from sqlalchemy import select
 import io, os, json
 from app.core.database import get_db
-from app.core.security import require_user
+from app.core.security import get_current_user, decode_access_token
 from app.models.recording import Recording
 from app.models.transcript import Transcript
+from app.models.user import User
 from app.models.interview import InterviewReport, QAPair, KnowledgePoint
 from app.config import get_settings
 
@@ -47,8 +48,65 @@ def _load_transcripts(recording_id: str, db: Session, user_id: str):
     return recording, tl
 
 
+def _require_export_user(token: str | None, user: dict | None, db: Session) -> dict:
+    """Allow browser downloads to authenticate via header or token query param."""
+    resolved = user
+    if not resolved and token:
+        payload = decode_access_token(token)
+        if payload:
+            resolved = {"id": payload["sub"], "username": payload.get("username", "")}
+    if not resolved:
+        raise HTTPException(401, "请先登录")
+    if not db.query(User).filter(User.id == resolved["id"]).first():
+        raise HTTPException(401, "用户不存在，请重新登录")
+    return resolved
+
+
+async def _load_recording_qa(recording_id: str, db: Session, user_id: str):
+    recording = db.execute(
+        select(Recording).where(Recording.id == recording_id, Recording.user_id == user_id)
+    ).scalar_one_or_none()
+    if not recording:
+        raise HTTPException(404, "Recording not found")
+
+    if recording.qa_json:
+        try:
+            qa_data = json.loads(recording.qa_json)
+            return recording, qa_data.get("qa_pairs", [])
+        except json.JSONDecodeError:
+            pass
+
+    transcripts = db.execute(
+        select(Transcript)
+        .where(Transcript.recording_id == recording_id)
+        .order_by(Transcript.start_time)
+    ).scalars().all()
+    if not transcripts:
+        return recording, []
+
+    from app.services.llm_service import llm_service
+
+    transcript_data = [
+        {"speaker": t.speaker, "speaker_name": t.speaker_name, "content": t.content}
+        for t in transcripts
+    ]
+    try:
+        qa_data = await llm_service.extract_qa_pairs(transcript_data)
+        recording.qa_json = json.dumps(qa_data, ensure_ascii=False)
+        db.commit()
+        return recording, qa_data.get("qa_pairs", [])
+    except Exception:
+        return recording, []
+
+
 @router.get("/{recording_id}/txt")
-async def export_txt(recording_id: str, db: Session = Depends(get_db), user: dict = Depends(require_user)):
+async def export_txt(
+    recording_id: str,
+    token: str | None = None,
+    db: Session = Depends(get_db),
+    user: dict | None = Depends(get_current_user),
+):
+    user = _require_export_user(token, user, db)
     recording, tl = _load_transcripts(recording_id, db, user["id"])
     header = f"Title: {recording.title}" + chr(10)
     lines = [header]
@@ -65,7 +123,13 @@ async def export_txt(recording_id: str, db: Session = Depends(get_db), user: dic
 
 
 @router.get("/{recording_id}/srt")
-async def export_srt(recording_id: str, db: Session = Depends(get_db), user: dict = Depends(require_user)):
+async def export_srt(
+    recording_id: str,
+    token: str | None = None,
+    db: Session = Depends(get_db),
+    user: dict | None = Depends(get_current_user),
+):
+    user = _require_export_user(token, user, db)
     recording, tl = _load_transcripts(recording_id, db, user["id"])
     lines = []
     for i, t in enumerate(tl, 1):
@@ -81,9 +145,15 @@ async def export_srt(recording_id: str, db: Session = Depends(get_db), user: dic
 
 
 @router.get("/{recording_id}/docx")
-async def export_docx(recording_id: str, db: Session = Depends(get_db), user: dict = Depends(require_user)):
+async def export_docx(
+    recording_id: str,
+    token: str | None = None,
+    db: Session = Depends(get_db),
+    user: dict | None = Depends(get_current_user),
+):
     from docx import Document
     from docx.shared import Pt, RGBColor
+    user = _require_export_user(token, user, db)
     recording, tl = _load_transcripts(recording_id, db, user["id"])
     doc = Document()
     style = doc.styles["Normal"]
@@ -112,8 +182,14 @@ async def export_docx(recording_id: str, db: Session = Depends(get_db), user: di
 
 
 @router.get("/{recording_id}/pdf")
-async def export_pdf(recording_id: str, db: Session = Depends(get_db), user: dict = Depends(require_user)):
+async def export_pdf(
+    recording_id: str,
+    token: str | None = None,
+    db: Session = Depends(get_db),
+    user: dict | None = Depends(get_current_user),
+):
     from fpdf import FPDF
+    user = _require_export_user(token, user, db)
     recording, tl = _load_transcripts(recording_id, db, user["id"])
     pdf = FPDF()
     pdf.add_page()
@@ -155,9 +231,127 @@ async def export_pdf(recording_id: str, db: Session = Depends(get_db), user: dic
     )
 
 
-@router.get("/report/{report_id}/pdf")
-async def export_report_pdf(report_id: str, db: Session = Depends(get_db), user: dict = Depends(require_user)):
+@router.get("/{recording_id}/qa/txt")
+async def export_qa_txt(
+    recording_id: str,
+    token: str | None = None,
+    db: Session = Depends(get_db),
+    user: dict | None = Depends(get_current_user),
+):
+    user = _require_export_user(token, user, db)
+    recording, qa_pairs = await _load_recording_qa(recording_id, db, user["id"])
+    lines = [f"Title: {recording.title}", "Content: Q&A Pairs", ""]
+    for i, pair in enumerate(qa_pairs, 1):
+        lines.append(f"Q{i}: {pair.get('question', '')}")
+        lines.append(f"A{i}: {pair.get('answer', '')}")
+        lines.append("")
+    content = chr(10).join(lines)
+    return StreamingResponse(
+        io.BytesIO(content.encode("utf-8")),
+        media_type="text/plain",
+        headers={"Content-Disposition": f"attachment; filename=recording_qa.txt; filename*=UTF-8''{quote(_export_basename(recording.title))}_qa.txt"},
+    )
+
+
+@router.get("/{recording_id}/qa/docx")
+async def export_qa_docx(
+    recording_id: str,
+    token: str | None = None,
+    db: Session = Depends(get_db),
+    user: dict | None = Depends(get_current_user),
+):
+    from docx import Document
+    from docx.shared import Pt, RGBColor
+
+    user = _require_export_user(token, user, db)
+    recording, qa_pairs = await _load_recording_qa(recording_id, db, user["id"])
+    doc = Document()
+    style = doc.styles["Normal"]
+    style.font.name = "Arial"
+    doc.add_heading(f"{recording.title} - Q&A", level=1)
+    if not qa_pairs:
+        doc.add_paragraph("No Q&A content available.")
+    for i, pair in enumerate(qa_pairs, 1):
+        question_run = doc.add_paragraph().add_run(f"Q{i}: {pair.get('question', '')}")
+        question_run.bold = True
+        question_run.font.size = Pt(11)
+        question_run.font.color.rgb = RGBColor(0x10, 0xB9, 0x81)
+        answer_paragraph = doc.add_paragraph()
+        answer_label = answer_paragraph.add_run("A: ")
+        answer_label.bold = True
+        answer_label.font.size = Pt(10)
+        answer_content = answer_paragraph.add_run(pair.get("answer", ""))
+        answer_content.font.size = Pt(10)
+    buf = io.BytesIO()
+    doc.save(buf)
+    buf.seek(0)
+    return StreamingResponse(
+        buf,
+        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        headers={"Content-Disposition": f"attachment; filename=recording_qa.docx; filename*=UTF-8''{quote(_export_basename(recording.title))}_qa.docx"},
+    )
+
+
+@router.get("/{recording_id}/qa/pdf")
+async def export_qa_pdf(
+    recording_id: str,
+    token: str | None = None,
+    db: Session = Depends(get_db),
+    user: dict | None = Depends(get_current_user),
+):
     from fpdf import FPDF
+
+    user = _require_export_user(token, user, db)
+    recording, qa_pairs = await _load_recording_qa(recording_id, db, user["id"])
+    pdf = FPDF()
+    pdf.add_page()
+    font_path = os.path.join(os.path.dirname(__file__), "..", "utils", "NotoSansSC-Regular.ttf")
+    if os.path.exists(font_path):
+        try:
+            pdf.add_font("notosans", "", font_path, uni=True)
+            family = "notosans"
+        except Exception:
+            family = "Helvetica"
+        family = "notosans"
+    else:
+        family = "Helvetica"
+    pdf.set_font(family, "", 16)
+    pdf.set_text_color(50, 50, 50)
+    pdf.cell(0, 12, f"{recording.title} - Q&A", new_x="LMARGIN", new_y="NEXT")
+    pdf.ln(4)
+    if not qa_pairs:
+        pdf.set_font(family, "", 10)
+        pdf.set_text_color(130, 130, 130)
+        pdf.cell(0, 8, "No Q&A content available.", new_x="LMARGIN", new_y="NEXT")
+    for i, pair in enumerate(qa_pairs, 1):
+        if pdf.get_y() > 250:
+            pdf.add_page()
+        pdf.set_font(family, "", 11)
+        pdf.set_text_color(16, 185, 129)
+        pdf.multi_cell(0, 7, f"Q{i}: {pair.get('question', '')}")
+        pdf.set_font(family, "", 10)
+        pdf.set_text_color(120, 120, 120)
+        pdf.multi_cell(0, 6, f"A: {pair.get('answer', '')}")
+        pdf.ln(3)
+    buf = io.BytesIO()
+    pdf.output(buf)
+    buf.seek(0)
+    return StreamingResponse(
+        buf,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"attachment; filename=recording_qa.pdf; filename*=UTF-8''{quote(_export_basename(recording.title))}_qa.pdf"},
+    )
+
+
+@router.get("/report/{report_id}/pdf")
+async def export_report_pdf(
+    report_id: str,
+    token: str | None = None,
+    db: Session = Depends(get_db),
+    user: dict | None = Depends(get_current_user),
+):
+    from fpdf import FPDF
+    user = _require_export_user(token, user, db)
     report = db.execute(
         select(InterviewReport).where(InterviewReport.id == report_id, InterviewReport.user_id == user["id"])
     ).scalar_one_or_none()

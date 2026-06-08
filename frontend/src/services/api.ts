@@ -123,12 +123,23 @@ export function getRecordingQA(id: string) {
   return request<import("../types").ConversationQA>("/recordings/" + id + "/qa");
 }
 
-export function exportRecording(id: string, format: "txt" | "srt" | "docx") {
-  window.open(BASE + "/export/" + id + "/" + format, "_blank");
+function buildAuthedDownloadUrl(path: string) {
+  const token = getToken();
+  if (!token) return BASE + path;
+  const joiner = path.includes("?") ? "&" : "?";
+  return BASE + path + joiner + "token=" + encodeURIComponent(token);
+}
+
+export function exportRecording(id: string, format: "txt" | "srt" | "docx" | "pdf") {
+  window.open(buildAuthedDownloadUrl("/export/" + id + "/" + format), "_blank");
+}
+
+export function exportRecordingQA(id: string, format: "txt" | "docx" | "pdf") {
+  window.open(buildAuthedDownloadUrl("/export/" + id + "/qa/" + format), "_blank");
 }
 
 export function exportReportPdf(id: string) {
-  window.open(BASE + "/export/report/" + id + "/pdf", "_blank");
+  window.open(buildAuthedDownloadUrl("/export/report/" + id + "/pdf"), "_blank");
 }
 
 export function updateTranscript(id: string, content: string, speakerName?: string) {

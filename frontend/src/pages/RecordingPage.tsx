@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { getRecording, getRecordingSummary, getRecordingQA, exportRecording, updateTranscript } from "../services/api";
+import { getRecording, getRecordingSummary, getRecordingQA, exportRecording, exportRecordingQA, updateTranscript } from "../services/api";
 import type { Recording, Transcript, ConversationSummary, ConversationQA } from "../types";
 import AudioPlayer, { type AudioPlayerHandle } from "../components/AudioPlayer";
 import {
@@ -104,6 +104,8 @@ export default function RecordingPage() {
   if (!rec) return <div className="p-12 text-center text-gray-500">加载中...</div>;
 
   const audioUrl = id ? "/api/recordings/" + id + "/audio" : "";
+  const showTranscriptExports = activeTab === "summary";
+  const showQaExports = activeTab === "qa";
 
   return (
     <div className="max-w-6xl mx-auto px-6 py-8">
@@ -137,7 +139,7 @@ export default function RecordingPage() {
 
       {/* Summary / QA Tabs */}
       <div className="mb-4">
-        <div className="flex items-center gap-2 bg-gray-900 rounded-lg p-1 border border-gray-800 w-fit">
+        <div className="flex flex-wrap items-center gap-2 bg-gray-900 rounded-lg p-1 border border-gray-800 w-fit">
           <button
             onClick={() => setActiveTab("summary")}
             className={"px-4 py-2 rounded text-sm font-medium transition-colors flex items-center gap-1.5 " + (activeTab === "summary" ? "bg-emerald-600 text-white" : "text-gray-400 hover:text-gray-200")}
@@ -152,6 +154,19 @@ export default function RecordingPage() {
             <ListChecks className="w-4 h-4" />
             问答
           </button>
+          {showQaExports && (
+            <div className="flex items-center gap-1 pl-1 border-l border-gray-800">
+              <button onClick={() => id && exportRecordingQA(id, "txt")} className="px-2.5 py-2 bg-gray-800 hover:bg-gray-700 rounded text-xs transition-colors" title="Export QA TXT">
+                QA TXT
+              </button>
+              <button onClick={() => id && exportRecordingQA(id, "docx")} className="px-2.5 py-2 bg-gray-800 hover:bg-gray-700 rounded text-xs transition-colors" title="Export QA DOCX">
+                QA DOCX
+              </button>
+              <button onClick={() => id && exportRecordingQA(id, "pdf")} className="px-2.5 py-2 bg-gray-800 hover:bg-gray-700 rounded text-xs transition-colors" title="Export QA PDF">
+                QA PDF
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
@@ -241,15 +256,19 @@ export default function RecordingPage() {
           <Edit3 className="w-3.5 h-3.5" /> {editMode ? "退出编辑" : "编辑模式"}
         </button>
         <div className="flex gap-1">
-          <button onClick={() => id && exportRecording(id, "txt")} className="px-2.5 py-2 bg-gray-800 hover:bg-gray-700 rounded text-xs transition-colors" title="Export TXT">
-            TXT
-          </button>
-          <button onClick={() => id && exportRecording(id, "srt")} className="px-2.5 py-2 bg-gray-800 hover:bg-gray-700 rounded text-xs transition-colors" title="Export SRT">
-            SRT
-          </button>
-          <button onClick={() => id && exportRecording(id, "docx")} className="px-2.5 py-2 bg-gray-800 hover:bg-gray-700 rounded text-xs transition-colors" title="Export DOCX">
-            DOCX
-          </button>
+          {showTranscriptExports && (
+            <>
+              <button onClick={() => id && exportRecording(id, "txt")} className="px-2.5 py-2 bg-gray-800 hover:bg-gray-700 rounded text-xs transition-colors" title="Export Transcript TXT">
+                TXT
+              </button>
+              <button onClick={() => id && exportRecording(id, "srt")} className="px-2.5 py-2 bg-gray-800 hover:bg-gray-700 rounded text-xs transition-colors" title="Export Transcript SRT">
+                SRT
+              </button>
+              <button onClick={() => id && exportRecording(id, "docx")} className="px-2.5 py-2 bg-gray-800 hover:bg-gray-700 rounded text-xs transition-colors" title="Export Transcript DOCX">
+                DOCX
+              </button>
+            </>
+          )}
         </div>
       </div>
 
